@@ -52,7 +52,7 @@ const CSS = `
   color:var(--accent);box-shadow:0 0 0 4px rgba(56,189,248,.05)}
 .ct-title{font-size:18px;font-weight:700;letter-spacing:.2px;line-height:1.1}
 .ct-sub{font-size:12px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase}
-.ct-rev{font-size:11px;color:var(--muted);border:1px solid var(--line2);
+.ct-rev{font-size:9px;color:var(--muted);border:1px solid var(--line2);
   padding:5px 9px;border-radius:6px;letter-spacing:1px}
 
 /* home cards */
