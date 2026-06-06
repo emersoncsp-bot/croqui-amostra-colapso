@@ -787,11 +787,11 @@ export default function App() {
           <div className="ct-brand">
             <div className="ct-mark"><PencilRuler size={22} /></div>
             <div>
-              <div className="ct-title">Croqui de Tubos</div>
-              <div className="ct-sub">Mapeamento de amostras · colapso</div>
+              <div className="ct-title">CONTROLE DA QUALIDADE</div>
+              <div className="ct-sub">Croqui para corte de amostras · colapso</div>
             </div>
           </div>
-          <div className="ct-rev mono">REV. A</div>
+          <div className="ct-rev mono">Desenvolvido por Emerson Santos</div>
         </div>
 
         {/* HOME */}
