@@ -51,9 +51,10 @@ const CSS = `
   display:flex;align-items:center;justify-content:center;background:var(--panel);
   color:var(--accent);box-shadow:0 0 0 4px rgba(56,189,248,.05)}
 .ct-title{font-size:18px;font-weight:700;letter-spacing:.2px;line-height:1.1}
-.ct-sub{font-size:12px;color:var(--muted);letter-spacing:.5px;text-transform;uppercase}
-.ct-rev{font-size:10px;color:var(--muted);border:1px solid var(--line2);
-  padding:5px 9px;border-radius:6px;letter-spacing:1px}
+.ct-sub{font-size:12px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase}
+.ct-cred{display:flex;flex-direction:column;align-items:flex-start;line-height:1.3}
+.ct-cred-top{font-size:10.5px;color:var(--muted)}
+.ct-cred-name{font-size:10px;font-weight:600;letter-spacing:.4px;color:var(--accent);text-transform:uppercase;margin-top:2px}
 
 /* home cards */
 .ct-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
@@ -788,10 +789,13 @@ export default function App() {
             <div className="ct-mark"><PencilRuler size={22} /></div>
             <div>
               <div className="ct-title">CONTROLE DA QUALIDADE</div>
-              <div className="ct-sub">CROQUI PARA CORTE DE AMOSTRAS · COLAPSO</div>
+              <div className="ct-sub">Croqui para corte de amostras · colapso</div>
             </div>
           </div>
-          <div className="ct-rev mono">Desenvolvido por Emerson Santos</div>
+          <div className="ct-cred">
+            <span className="ct-cred-top">Desenvolvido por</span>
+            <span className="ct-cred-name">Emerson Santos</span>
+          </div>
         </div>
 
         {/* HOME */}
