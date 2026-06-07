@@ -788,7 +788,7 @@ export default function App() {
             <div className="ct-mark"><PencilRuler size={22} /></div>
             <div>
               <div className="ct-title">CONTROLE DA QUALIDADE</div>
-              <div className="ct-sub">Croqui para corte de amostras · Colapso</div>
+              <div className="ct-sub">CROQUI PARA CORTE DE AMOSTRAS · COLAPSO</div>
             </div>
           </div>
           <div className="ct-rev mono">Desenvolvido por Emerson Santos</div>
