@@ -533,9 +533,9 @@ function Croqui({ s, index, total }) {
         const INT = "INTERNO (sem acompanhamento)";
         const pos = s.posicao || "—";
         const rows = [
-          ["COLAPSO", sig, "hatch", colLenVal, "AM_COLAPSO", pos, s.tipoColapso || INT],
+          ["COLAPSO", sig, "hatch", colLenVal, "AM_COLPS", pos, s.tipoColapso || INT],
           ["TENSÃO RESIDUAL", sigRes, "hatchRes", residualLen, "AM_TENSA", pos, INT],
-          ["TRAÇÃO", sigTra, "hatchTra", tracaoLen, "AM_TRACA", pos, INT],
+          ["TRAÇÃO", sigTra, "hatchTra", tracaoLen, "AM_TRACC", pos, INT],
         ];
         const bx = 34, by = VB_H - 214, bw = 868;
         const cAm = bx + 38, cTam = bx + 230, cCod = bx + 330,
@@ -706,61 +706,80 @@ export default function App() {
         setImportErr("Planilha vazia ou sem cabeçalho reconhecível.");
         return;
       }
-      const parsed = [];
-      let skipped = 0;
-      rows.forEach((row, i) => {
+      // 1 - lê cada linha
+      const records = rows.map((row) => {
         const nrow = {};
         Object.keys(row).forEach((k) => (nrow[norm(k)] = row[k]));
+        return {
+          od: colNum(nrow, (h) => h === "od"),
+          wt: colNum(nrow, (h) => h === "wt"),
+          length: colNum(nrow, (h) => h.includes("comprimento")),
+          psi: colNum(nrow, (h) => h.includes("psi")) || 0,
+          grau: colTxt(nrow, (h) => h.includes("grau")),
+          pedidoItem: colTxt(nrow, (h) => h.includes("pedido") && h.includes("item")),
+          ordemProducao: colTxt(nrow, (h) => h.includes("ordem")),
+          posNum: colNum(nrow, (h) => h.includes("high")),
+          posTxtRaw: colTxt(nrow, (h) => h === "posicao"),
+          tipoRaw: colTxt(nrow, (h) => h.includes("tipo-amostra") || h.includes("tipo amostra")),
+          ippn: colTxt(nrow, (h) => h.includes("ippn")),
+        };
+      });
 
-        // mapeamento de colunas (campo manual ; coluna da planilha)
-        const od = colNum(nrow, (h) => h === "od"); // OD
-        const wt = colNum(nrow, (h) => h === "wt"); // WT
-        const length = colNum(nrow, (h) => h.includes("comprimento")); // Comprimento do tubo MES
-        const psi = colNum(nrow, (h) => h.includes("psi")) || 0; // Pressão Spec (Psi)
-        const grau = colTxt(nrow, (h) => h.includes("grau")); // Grau do aço
-        const pedidoItem = colTxt(nrow, (h) => h.includes("pedido") && h.includes("item")); // Pedido/Item
-        const ordemProducao = colTxt(nrow, (h) => h.includes("ordem")); // Ordem de Produção
-        const posNum = colNum(nrow, (h) => h.includes("high")); // Posição High Collapse(mm) PP2020
-        const posTxtRaw = colTxt(nrow, (h) => h === "posicao"); // Posição (Pé/Meio/Ponta)
-        const tipoRaw = colTxt(nrow, (h) => h.includes("tipo-amostra") || h.includes("tipo amostra")); // Tipo-amostra
-        const ippn = colTxt(nrow, (h) => h.includes("ippn")); // IPPN
+      // 2 - agrupa por IPPN + Ordem de Produção (mesmo tubo -> mesmo croqui)
+      const groupsMap = new Map();
+      const orderKeys = [];
+      records.forEach((r, i) => {
+        const hasKey = norm(r.ippn) !== "" && norm(r.ordemProducao) !== "";
+        const key = hasKey ? `${norm(r.ippn)}||${norm(r.ordemProducao)}` : `__single_${i}`;
+        if (!groupsMap.has(key)) {
+          groupsMap.set(key, []);
+          orderKeys.push(key);
+        }
+        groupsMap.get(key).push(r);
+      });
 
-        // OD, WT, comprimento e posição são obrigatórios na importação
-        if (![od, wt, length].every((v) => typeof v === "number" && v > 0)) {
-          skipped++;
+      // 3 - monta um croqui por grupo
+      const parsed = [];
+      let skipped = 0;
+      orderKeys.forEach((key, gi) => {
+        const grp = groupsMap.get(key);
+        const f = grp[0]; // a 1ª linha define o tubo e a posição do 1º colapso
+        if (
+          ![f.od, f.wt, f.length].every((v) => typeof v === "number" && v > 0) ||
+          typeof f.posNum !== "number"
+        ) {
+          skipped += grp.length;
           return;
         }
-        if (typeof posNum !== "number") {
-          skipped++;
-          return;
-        }
-        const colLen = collapseSampleLen(od, psi);
+        const colLen = collapseSampleLen(f.od, f.psi);
         if (colLen === null) {
-          skipped++;
-          return; // OD/pressão fora dos critérios de tamanho (item 6)
+          skipped += grp.length;
+          return; // OD/pressão fora dos critérios de tamanho
         }
 
-        const pt = norm(posTxtRaw);
+        const pt = norm(f.posTxtRaw);
         const posicao = pt.startsWith("pe") ? "Pé" : pt.startsWith("pont") ? "Ponta" : "Meio";
-        const tipoColapso = norm(tipoRaw).includes("externo")
+        const tipoColapso = norm(f.tipoRaw).includes("externo")
           ? "EXTERNO (com acompanhamento TPI)"
           : "INTERNO (sem acompanhamento)";
 
-        // 1 colapso por linha; posição fixa vinda do arquivo (mesma montagem do manual)
-        const firstPos = roundNearestTen(posNum);
+        // nº de colapsos = nº de linhas do grupo; a posição High Collapse vale só
+        // para o 1º colapso; os demais entram em sequência.
+        const n = grp.length;
+        const firstPos = roundNearestTen(f.posNum);
         const collapses = buildManualCollapses({
-          od, L: length, n: 1, colLen, posMode: "fixa", firstPos,
+          od: f.od, L: f.length, n, colLen, posMode: "fixa", firstPos,
         });
 
         parsed.push({
-          id: Date.now() + i,
-          od, wt, length, psi, grau,
-          produto: `${fmt(od)} x ${fmt(wt)}${grau ? " - " + grau : ""}`,
-          pedidoItem: pedidoItem || "—",
-          ordemProducao: ordemProducao || "—",
+          id: Date.now() + gi,
+          od: f.od, wt: f.wt, length: f.length, psi: f.psi, grau: f.grau,
+          produto: `${fmt(f.od)} x ${fmt(f.wt)}${f.grau ? " - " + f.grau : ""}`,
+          pedidoItem: f.pedidoItem || "—",
+          ordemProducao: f.ordemProducao || "—",
           posicao,
           tipoColapso,
-          ippn: ippn || `Linha ${i + 1}`,
+          ippn: f.ippn || `Linha ${gi + 1}`,
           collapses,
         });
       });
@@ -771,7 +790,7 @@ export default function App() {
         return;
       }
       if (skipped > 0)
-        setImportErr(`${parsed.length} linha(s) importada(s); ${skipped} ignorada(s) por dados ausentes ou fora dos critérios.`);
+        setImportErr(`${parsed.length} página(s) gerada(s); ${skipped} linha(s) ignorada(s) por dados ausentes ou fora dos critérios.`);
       setSketches(parsed);
       setScreen("result");
     } catch (e) {
@@ -930,6 +949,9 @@ export default function App() {
                 <FileSpreadsheet size={16} />
                 <span>
                   Cada linha gera uma página (1 colapso por tubo, vinculado ao <b>IPPN</b>).
+                  Linhas com o <b>mesmo IPPN e a mesma Ordem de Produção</b> são agrupadas
+                  num único croqui (vários colapsos no mesmo tubo); nesse caso a
+                  <b> Posição High Collapse</b> vale só para o 1º colapso e os demais entram em sequência.
                   Colunas esperadas: <b>OD</b>, <b>WT</b>, <b>Grau do aço</b>,
                   <b> Comprimento do tubo MES</b>, <b>Pressão Spec (Psi)</b>, <b>Pedido/Item</b>,
                   <b> Ordem de Produção</b>, <b>Posição High Collapse(mm)</b>, <b>Posição</b>,
