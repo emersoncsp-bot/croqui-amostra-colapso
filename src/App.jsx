@@ -281,7 +281,7 @@ function Croqui({ s, index, total }) {
   const mL = 150,
     mR = 70;
   const drawW = VB_W - mL - mR;
-  const cy = 300;
+  const cy = 322;
   const tubeH = 112;
   const top = cy - tubeH / 2;
   const bot = cy + tubeH / 2;
@@ -342,7 +342,12 @@ function Croqui({ s, index, total }) {
       len > L ||
       Math.min(resStart, traStart) < 0 ||
       Math.max(resEnd, traEnd) > L;
-    return { i, ref, len, side, colStart, colEnd,
+    // extensão total do grupo (colapso + tensão residual + tração) p/ o colchete
+    const gMin = Math.max(0, Math.min(colStart, resStart, traStart));
+    const gMax = Math.min(L, Math.max(colEnd, resEnd, traEnd));
+    const posicao = c.posicao || s.posicao || "—";
+    const tipo = c.tipo || s.tipoColapso || "INTERNO (sem acompanhamento)";
+    return { i, ref, len, side, posicao, tipo, gMin, gMax, colStart, colEnd,
       resStart, resEnd, traStart, traEnd, overflow };
   });
   const anyWarn = groups.some((g) => g.overflow);
@@ -360,7 +365,7 @@ function Croqui({ s, index, total }) {
   // rótulo do nome do segmento, acima da amostra (escalonado por nível)
   const Tag = ({ a, b, color, text, level }) => {
     const cx = (X(cl(a)) + X(cl(b))) / 2;
-    const ly = top - 6 - level * 26;
+    const ly = top - 6 - level * 24;
     const tw = text.length * 9.5 + 16;
     return (
       <g>
@@ -371,6 +376,26 @@ function Croqui({ s, index, total }) {
           fill="#fff" stroke={color} strokeWidth="0.9" />
         <text x={cx} y={ly - 2} textAnchor="middle" fontSize="18" fontWeight="600"
           fontFamily="'IBM Plex Sans',sans-serif" fill={color}>{text}</text>
+      </g>
+    );
+  };
+
+  // colchete que agrupa colapso + tensão residual + tração de uma posição
+  const PosBracket = ({ a, b, label }) => {
+    const x1 = X(cl(a));
+    const x2 = X(cl(b));
+    if (x2 - x1 < 2) return null;
+    const yB = top - 86; // linha do colchete
+    const drop = 9; // pernas descendo em direção ao tubo
+    return (
+      <g>
+        <path
+          d={`M ${x1} ${yB + drop} L ${x1} ${yB} L ${x2} ${yB} L ${x2} ${yB + drop}`}
+          fill="none" stroke="#5a6a82" strokeWidth="1.4" />
+        <text x={(x1 + x2) / 2} y={yB - 7} textAnchor="middle" fontSize="14.5"
+          fontWeight="700" fontFamily="'IBM Plex Sans',sans-serif" fill="#5a6a82">
+          {label}
+        </text>
       </g>
     );
   };
@@ -431,7 +456,6 @@ function Croqui({ s, index, total }) {
           <tspan fill={ink}>{r[1]}</tspan>
         </text>
       ))}
-      <line x1="34" y1={168} x2={VB_W - 34} y2={168} stroke="#eef1f6" strokeWidth="1" />
 
       {/* ---- TUBO (vista lateral) ---- */}
       {/* corpo */}
@@ -466,6 +490,11 @@ function Croqui({ s, index, total }) {
           <Tag a={g.resStart} b={g.resEnd} color={sigRes} level={1} text="TENSÃO RESIDUAL" />
           <Tag a={g.traStart} b={g.traEnd} color={sigTra} level={0} text="TRAÇÃO" />
         </g>
+      ))}
+
+      {/* colchete por posição (agrupa colapso + tensão residual + tração) */}
+      {groups.map((g) => (
+        <PosBracket key={`pb${g.i}`} a={g.gMin} b={g.gMax} label={`Posição ${g.posicao}`} />
       ))}
 
       {/* linha de centro por colapso */}
@@ -529,40 +558,71 @@ function Croqui({ s, index, total }) {
 
       {/* ---- legenda (tabela) ---- */}
       {(() => {
-        const TPI = "EXTERNO (com acompanhamento TPI)";
         const INT = "INTERNO (sem acompanhamento)";
-        const pos = s.posicao || "—";
-        const rows = [
-          ["COLAPSO", sig, "hatch", colLenVal, "AM_COLPS", pos, s.tipoColapso || INT],
-          ["TENSÃO RESIDUAL", sigRes, "hatchRes", residualLen, "AM_TENSA", pos, INT],
-          ["TRAÇÃO", sigTra, "hatchTra", tracaoLen, "AM_TRACC", pos, INT],
+        const Ng = groups.length || 1;
+        const rowsMeta = [
+          { name: "COLAPSO", color: sig, pat: "hatch", size: colLenVal, cod: "AM_COLPS", tipoOf: (g) => (g ? g.tipo : INT) || INT },
+          { name: "TENSÃO RESIDUAL", color: sigRes, pat: "hatchRes", size: residualLen, cod: "AM_TENSA", tipoOf: () => INT },
+          { name: "TRAÇÃO", color: sigTra, pat: "hatchTra", size: tracaoLen, cod: "AM_TRACC", tipoOf: () => INT },
         ];
-        const bx = 34, by = VB_H - 214, bw = 868;
-        const cAm = bx + 38, cTam = bx + 230, cCod = bx + 330,
-          cPos = bx + 470, cTipo = bx + 580;
+        const bx = 34, by = VB_H - 214;
+        const cSw = bx + 12, cAm = bx + 36, cTam = bx + 190, cCod = bx + 290;
+        const gx0 = bx + 380;
+        const bwMax = VB_W - 34 - bx;
+        const gcw = Math.max(150, Math.floor((bwMax - (gx0 - bx) - 12) / Ng));
+        const bw = (gx0 - bx) + Ng * gcw + 12;
+        const tipoFs = Ng >= 4 ? 9 : Ng === 3 ? 10.5 : Ng === 2 ? 12.5 : 13.5;
+        const headY = by + 58; // linha dos cabeçalhos de coluna
         return (
           <g fontFamily="'IBM Plex Mono',monospace">
             <rect x={bx} y={by} width={bw} height="150" fill="#fff" stroke={ink} strokeWidth="1.2" />
-            <text x={bx + 12} y={by + 24} fontSize="16.5" fontWeight="700" fill="#5a6a82"
+            <text x={bx + 12} y={by + 22} fontSize="16.5" fontWeight="700" fill="#5a6a82"
               fontFamily="'IBM Plex Sans',sans-serif">LEGENDA</text>
-            {/* cabeçalho da tabela */}
-            {[["AMOSTRA", cAm], ["TAMANHO", cTam], ["COD. MES", cCod],
-              ["POSIÇÃO", cPos], ["TIPO-AMOSTRA", cTipo]].map(([t, x]) => (
-              <text key={t} x={x} y={by + 50} fontSize="14" fontWeight="700" fill="#5a6a82"
+
+            {/* agrupador POSIÇÃO sobre as colunas de tipo-amostra */}
+            <rect x={gx0} y={by + 30} width={Ng * gcw} height="17" fill="#dce6f1" />
+            <text x={gx0 + (Ng * gcw) / 2} y={by + 43} textAnchor="middle" fontSize="13"
+              fontWeight="700" fill="#3a4a63" fontFamily="'IBM Plex Sans',sans-serif">POSIÇÃO</text>
+
+            {/* cabeçalhos das colunas fixas */}
+            {[["AMOSTRA", cAm], ["TAMANHO", cTam], ["COD. MES", cCod]].map(([t, x]) => (
+              <text key={t} x={x} y={headY} fontSize="13.5" fontWeight="700" fill="#5a6a82"
                 fontFamily="'IBM Plex Sans',sans-serif">{t}</text>
             ))}
-            <line x1={bx + 12} y1={by + 58} x2={bx + bw - 12} y2={by + 58} stroke="#dde3ec" strokeWidth="1" />
-            {rows.map((r, i) => {
-              const ry = by + 82 + i * 26;
+
+            {/* cabeçalho por posição (Pé/Meio/Ponta) + legenda "TIPO-AMOSTRA" */}
+            {groups.map((g, j) => {
+              const gx = gx0 + j * gcw;
+              return (
+                <g key={`gh${j}`}>
+                  {j > 0 && (
+                    <line x1={gx} y1={by + 30} x2={gx} y2={by + 142} stroke="#e3e8ef" strokeWidth="1" />
+                  )}
+                  <text x={gx + 8} y={headY} fontSize="13.5" fontWeight="700" fill="#3a4a63"
+                    fontFamily="'IBM Plex Sans',sans-serif">{String(g.posicao).toUpperCase()}</text>
+                  <text x={gx + 8} y={headY + 14} fontSize="10.5" fontWeight="600" fill="#8190a6"
+                    fontFamily="'IBM Plex Sans',sans-serif">TIPO-AMOSTRA</text>
+                </g>
+              );
+            })}
+
+            <line x1={bx + 12} y1={by + 78} x2={bx + bw - 12} y2={by + 78} stroke="#dde3ec" strokeWidth="1" />
+
+            {/* linhas: COLAPSO / TENSÃO RESIDUAL / TRAÇÃO */}
+            {rowsMeta.map((r, i) => {
+              const ry = by + 98 + i * 20;
               return (
                 <g key={i}>
-                  <rect x={bx + 12} y={ry - 13} width="17" height="17"
-                    fill={`url(#${r[2]})`} stroke={r[1]} strokeWidth="1" />
-                  <text x={cAm} y={ry} fontSize="14" fill={r[1]}>{r[0]}</text>
-                  <text x={cTam} y={ry} fontSize="14" fill={ink}>{`${fmt(r[3])}mm`}</text>
-                  <text x={cCod} y={ry} fontSize="14" fill={ink}>{r[4]}</text>
-                  <text x={cPos} y={ry} fontSize="14" fill={ink}>{r[5]}</text>
-                  <text x={cTipo} y={ry} fontSize="13.5" fill={ink}>{r[6]}</text>
+                  <rect x={cSw} y={ry - 12} width="15" height="15"
+                    fill={`url(#${r.pat})`} stroke={r.color} strokeWidth="1" />
+                  <text x={cAm} y={ry} fontSize="13" fill={r.color}>{r.name}</text>
+                  <text x={cTam} y={ry} fontSize="13" fill={ink}>{`${fmt(r.size)}mm`}</text>
+                  <text x={cCod} y={ry} fontSize="13" fill={ink}>{r.cod}</text>
+                  {groups.map((g, j) => (
+                    <text key={`c${i}_${j}`} x={gx0 + j * gcw + 8} y={ry} fontSize={tipoFs} fill={ink}>
+                      {r.tipoOf(g)}
+                    </text>
+                  ))}
                 </g>
               );
             })}
@@ -602,12 +662,16 @@ export default function App() {
     count: "1",
     posMode: "fixa", // fixa | aleatoria
     firstPos: "",
-    posicao: "Meio", // Pé | Meio | Ponta
     ippn: "",
-    tipoColapso: "EXTERNO (com acompanhamento TPI)",
+    // posição (Pé|Meio|Ponta) e tipo-amostra por amostra de colapso
+    positions: ["Meio"],
+    tipos: ["EXTERNO (com acompanhamento TPI)"],
   };
   const [form, setForm] = useState(blank);
   const [err, setErr] = useState("");
+
+  // nº de amostras de colapso (1..20)
+  const nCount = Math.min(Math.max(parseInt(form.count || "1", 10) || 1, 1), 20);
 
   const printAll = () => window.print();
 
@@ -616,8 +680,23 @@ export default function App() {
     return isNaN(n) ? null : n;
   };
 
-  const setCount = (v) =>
-    setForm((f) => ({ ...f, count: v.replace(/[^\d]/g, "") }));
+  const setCount = (v) => {
+    const digits = v.replace(/[^\d]/g, "");
+    setForm((f) => {
+      const n = Math.min(Math.max(parseInt(digits || "1", 10) || 1, 1), 20);
+      const grow = (arr, fill) => {
+        const a = (arr || []).slice(0, n);
+        while (a.length < n) a.push(fill);
+        return a;
+      };
+      return {
+        ...f,
+        count: digits,
+        positions: grow(f.positions, "Meio"),
+        tipos: grow(f.tipos, "EXTERNO (com acompanhamento TPI)"),
+      };
+    });
+  };
 
   const submitManual = () => {
     const od = toNum(form.od),
@@ -658,6 +737,16 @@ export default function App() {
     const collapses = buildManualCollapses({
       od, L: length, n, colLen, posMode: form.posMode, firstPos,
     });
+    // posição (Pé/Meio/Ponta) e tipo-amostra por colapso
+    const positions = (form.positions || []).slice(0, n);
+    const tipos = (form.tipos || []).slice(0, n);
+    while (positions.length < n) positions.push("Meio");
+    while (tipos.length < n) tipos.push("EXTERNO (com acompanhamento TPI)");
+    const collapsesMeta = collapses.map((c, k) => ({
+      ...c,
+      posicao: positions[k],
+      tipo: tipos[k],
+    }));
     const produto = `${fmt(od)} x ${fmt(wt)} - ${form.grau.trim()}`;
     const sk = {
       id: Date.now(),
@@ -666,10 +755,10 @@ export default function App() {
       produto,
       pedidoItem: form.pedidoItem.trim(),
       ordemProducao: form.ordemProducao.trim(),
-      posicao: form.posicao,
-      tipoColapso: form.tipoColapso,
+      posicao: positions[0],
+      tipoColapso: tipos[0],
       ippn: form.ippn.trim(),
-      collapses,
+      collapses: collapsesMeta,
     };
     setSketches((p) => [...p, sk]);
     setForm(blank);
@@ -757,11 +846,15 @@ export default function App() {
           return; // OD/pressão fora dos critérios de tamanho
         }
 
-        const pt = norm(f.posTxtRaw);
-        const posicao = pt.startsWith("pe") ? "Pé" : pt.startsWith("pont") ? "Ponta" : "Meio";
-        const tipoColapso = norm(f.tipoRaw).includes("externo")
-          ? "EXTERNO (com acompanhamento TPI)"
-          : "INTERNO (sem acompanhamento)";
+        // posição (Pé/Meio/Ponta) e tipo-amostra de cada colapso (uma por linha do grupo)
+        const metas = grp.map((r) => {
+          const pt = norm(r.posTxtRaw);
+          const posicao = pt.startsWith("pe") ? "Pé" : pt.startsWith("pont") ? "Ponta" : "Meio";
+          const tipo = norm(r.tipoRaw).includes("externo")
+            ? "EXTERNO (com acompanhamento TPI)"
+            : "INTERNO (sem acompanhamento)";
+          return { posicao, tipo };
+        });
 
         // nº de colapsos = nº de linhas do grupo; a posição High Collapse vale só
         // para o 1º colapso; os demais entram em sequência.
@@ -769,7 +862,7 @@ export default function App() {
         const firstPos = roundNearestTen(f.posNum);
         const collapses = buildManualCollapses({
           od: f.od, L: f.length, n, colLen, posMode: "fixa", firstPos,
-        });
+        }).map((c, k) => ({ ...c, posicao: metas[k].posicao, tipo: metas[k].tipo }));
 
         parsed.push({
           id: Date.now() + gi,
@@ -777,8 +870,8 @@ export default function App() {
           produto: `${fmt(f.od)} x ${fmt(f.wt)}${f.grau ? " - " + f.grau : ""}`,
           pedidoItem: f.pedidoItem || "—",
           ordemProducao: f.ordemProducao || "—",
-          posicao,
-          tipoColapso,
+          posicao: metas[0].posicao,
+          tipoColapso: metas[0].tipo,
           ippn: f.ippn || `Linha ${gi + 1}`,
           collapses,
         });
@@ -892,26 +985,53 @@ export default function App() {
                   )}
                 </div>
                 {form.posMode === "fixa" && (
-                  <Field label="Posição High Collapse" unit="mm"
+                  <Field label="Posição High Collapse (1º colapso)" unit="mm"
                     value={form.firstPos}
                     onChange={(v) => setForm({ ...form, firstPos: v })} />
                 )}
-                <Field label="Posição" options={["Pé", "Meio", "Ponta"]}
-                  value={form.posicao}
-                  onChange={(v) => setForm({ ...form, posicao: v })} />
               </div>
 
               <div className="ct-frm" style={{ marginTop: 16 }}>
                 <Field label="IPPN" text value={form.ippn}
                   onChange={(v) => setForm({ ...form, ippn: v })} />
-                <Field label="Tipo-amostra"
-                  options={[
-                    "EXTERNO (com acompanhamento TPI)",
-                    "INTERNO (sem acompanhamento)",
-                  ]}
-                  value={form.tipoColapso}
-                  onChange={(v) => setForm({ ...form, tipoColapso: v })} />
               </div>
+
+              {/* Posição (Pé/Meio/Ponta) e Tipo-amostra por amostra de colapso */}
+              <div className="pos-block" style={{ gridTemplateColumns: "1fr" }}>
+                <label style={{ fontSize: 12, color: "var(--muted)", letterSpacing: ".4px",
+                  textTransform: "uppercase", fontWeight: 500 }}>
+                  Posição e tipo-amostra por colapso
+                </label>
+              </div>
+              {Array.from({ length: nCount }).map((_, k) => (
+                <div className="ct-frm" key={`amostra-${k}`} style={{ marginTop: 12 }}>
+                  <Field
+                    label={nCount > 1 ? `Posição — colapso ${k + 1}` : "Posição"}
+                    options={["Pé", "Meio", "Ponta"]}
+                    value={(form.positions && form.positions[k]) || "Meio"}
+                    onChange={(v) =>
+                      setForm((f) => {
+                        const a = (f.positions || []).slice();
+                        a[k] = v;
+                        return { ...f, positions: a };
+                      })
+                    } />
+                  <Field
+                    label={nCount > 1 ? `Tipo-amostra — colapso ${k + 1}` : "Tipo-amostra"}
+                    options={[
+                      "EXTERNO (com acompanhamento TPI)",
+                      "INTERNO (sem acompanhamento)",
+                    ]}
+                    value={(form.tipos && form.tipos[k]) || "EXTERNO (com acompanhamento TPI)"}
+                    onChange={(v) =>
+                      setForm((f) => {
+                        const a = (f.tipos || []).slice();
+                        a[k] = v;
+                        return { ...f, tipos: a };
+                      })
+                    } />
+                </div>
+              ))}
 
               {err && (
                 <div className="note">
