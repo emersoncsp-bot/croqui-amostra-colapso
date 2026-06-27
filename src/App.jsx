@@ -618,11 +618,16 @@ function Croqui({ s, index, total }) {
                   <text x={cAm} y={ry} fontSize="13" fill={r.color}>{r.name}</text>
                   <text x={cTam} y={ry} fontSize="13" fill={ink}>{`${fmt(r.size)}mm`}</text>
                   <text x={cCod} y={ry} fontSize="13" fill={ink}>{r.cod}</text>
-                  {groups.map((g, j) => (
-                    <text key={`c${i}_${j}`} x={gx0 + j * gcw + 8} y={ry} fontSize={tipoFs} fill={ink}>
-                      {r.tipoOf(g)}
-                    </text>
-                  ))}
+                  {groups.map((g, j) => {
+                    const tipoVal = r.tipoOf(g);
+                    const isExterno = String(tipoVal).toUpperCase().includes("EXTERNO");
+                    return (
+                      <text key={`c${i}_${j}`} x={gx0 + j * gcw + 8} y={ry} fontSize={tipoFs}
+                        fill={isExterno ? sig : ink} fontWeight={isExterno ? "700" : "400"}>
+                        {tipoVal}
+                      </text>
+                    );
+                  })}
                 </g>
               );
             })}
