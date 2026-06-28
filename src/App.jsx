@@ -9,6 +9,7 @@ import {
   FileSpreadsheet,
   AlertTriangle,
   Trash2,
+  FileText,
 } from "lucide-react";
 
 /* =========================================================================
@@ -143,6 +144,13 @@ select.inp{appearance:none;-webkit-appearance:none;cursor:pointer;padding-right:
 .page svg{display:block;width:100%;height:100%}
 .page-tag{position:absolute;top:3px;right:6px;font-size:8px;color:#9aa6b8;
   letter-spacing:1px;z-index:2}
+
+/* rodapé com link do manual */
+.ct-foot{margin-top:48px;padding-top:18px;border-top:1px solid var(--line);
+  display:flex;justify-content:center}
+.ct-foot a{display:inline-flex;align-items:center;gap:6px;color:var(--muted2);
+  font-size:12px;text-decoration:none;transition:.15s;letter-spacing:.3px}
+.ct-foot a:hover{color:var(--accent)}
 
 @media print{
   @page{size:A4 landscape;margin:0}
@@ -1119,6 +1127,13 @@ export default function App() {
             )}
           </>
         )}
+
+        {/* RODAPÉ — link do manual (não sai na impressão) */}
+        <div className="ct-foot no-print">
+          <a href="/manual.pdf" target="_blank" rel="noreferrer">
+            <FileText size={14} /> Manual do usuário
+          </a>
+        </div>
       </div>
     </div>
   );
